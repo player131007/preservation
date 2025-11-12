@@ -1,5 +1,4 @@
 { config, lib, ... }:
-
 let
   cfg = config.preservation;
 
@@ -24,7 +23,7 @@ in
     ];
 
     boot.initrd.systemd = {
-      targets.initrd-preservation = {
+      targets.preservation = {
         description = "Initrd Preservation Mounts";
         before = [ "initrd.target" ];
         wantedBy = [ "initrd.target" ];
@@ -46,6 +45,5 @@ in
       );
       mounts = lib.flatten (lib.mapAttrsToList mkRegularMountUnits cfg.preserveAt);
     };
-
   };
 }

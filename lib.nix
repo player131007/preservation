@@ -406,21 +406,15 @@ rec {
         ];
         unitConfig.DefaultDependencies = "no";
         conflicts = [ "umount.target" ];
-        wantedBy =
-          if forInitrd then
-            [
-              "initrd-preservation.target"
-            ]
-          else
-            [
-              "preservation.target"
-            ];
+        wantedBy = [
+          "preservation.target"
+        ];
         before =
           if forInitrd then
             [
               # directory mounts are set up before tmpfiles
               "systemd-tmpfiles-setup-sysroot.service"
-              "initrd-preservation.target"
+              "preservation.target"
             ]
           else
             [
@@ -460,8 +454,8 @@ rec {
             [ "systemd-tmpfiles-setup-sysroot.service" ]
           else
             [ "systemd-tmpfiles-setup.service" ];
-        wantedBy = if forInitrd then [ "initrd-preservation.target" ] else [ "preservation.target" ];
-        before = if forInitrd then [ "initrd-preservation.target" ] else [ "preservation.target" ];
+        wantedBy = [ "preservation.target" ];
+        before = [ "preservation.target" ];
       }) mountedFiles;
 
       mountUnits = directoryMounts ++ fileMounts;
