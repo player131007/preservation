@@ -1,71 +1,61 @@
 { lib, ... }:
-
+let
+  inherit (builtins)
+    concatStringsSep
+    foldl'
+    genList
+    take
+    length
+    dirOf
+    substring
+    ;
+  inherit (lib.lists) dropEnd;
+in
 rec {
   # converts a list of `mountOption` to a comma-separated string that is passed to the mount unit
   toOptionsString =
     mountOptions:
-    builtins.concatStringsSep "," (
+    concatStringsSep "," (
       map (
         option: if option.value == null then option.name else "${option.name}=${option.value}"
       ) mountOptions
     );
 
-  # concatenates two paths
-  # inserts a "/" in between if there is none, removes one if there are two
-  concatTwoPaths =
-    parent: child:
-    with lib.strings;
-    if hasSuffix "/" parent then
-      if
-        hasPrefix "/" child
-      # "/parent/" "/child"
-      then
-        parent + (removePrefix "/" child)
-      # "/parent/" "child"
-      else
-        parent + child
-    else if
-      hasPrefix "/" child
-    # "/parent" "/child"
-    then
-      parent + child
-    # "/parent" "child"
-    else
-      parent + "/" + child;
+  # concatPaths [ "foo" "" "bar//baz" ] == "/foo/bar/baz"
+  # we just need the path so we use `toString`
+  concatPaths = components: toString (foldl' (path: comp: path + "/${comp}") /. components);
 
-  # concatenates a list of paths using `concatTwoPaths`
-  concatPaths = builtins.foldl' concatTwoPaths "";
-
-  # get the parent directory of an absolute path
+  # i intend to replace this with just `dirOf`
   parentDirectory =
     path:
-    with lib.strings;
-    assert "/" == (builtins.substring 0 1 path);
-    let
-      parts = splitString "/" (removeSuffix "/" path);
-      len = builtins.length parts;
-    in
-    if len < 1 then "/" else concatPaths ([ "/" ] ++ (lib.lists.sublist 0 (len - 1) parts));
+    assert "/" == substring 0 1 path;
+    dirOf path;
 
-  # splits a path on "/", returning a list of non-empty path components
-  parts =
-    path:
-    builtins.foldl' (acc: p: if builtins.isString p && p != "" then acc ++ [ p ] else acc) [ ] (
-      builtins.split "/" path
-    );
+  # borrowed from <nixpkgs/lib/path/default.nix>
+  deconstructPath =
+    let
+      recurse =
+        components: base:
+        # If the parent of a path is the path itself, then it's a filesystem root
+        if base == dirOf base then
+          {
+            root = base;
+            inherit components;
+          }
+        else
+          recurse ([ (baseNameOf base) ] ++ components) (dirOf base);
+    in
+    recurse [ ];
 
   # generates a list of path segments that are parents of the given path
   # e.g.: for "/foo/bar/baz" this yields [ "foo" "foo/bar" ]
   parentSegments =
     path:
     let
-      # collect all path segments, including the given path itself
-      includingPath = builtins.foldl' (
-        acc: part: if acc == [ ] then [ part ] else ([ (concatTwoPaths (builtins.head acc) part) ] ++ acc)
-      ) [ ] (parts path);
-      # return all path segments except for the given path
+      components = dropEnd 1 (deconstructPath path).components;
     in
-    builtins.tail includingPath;
+    # we don't use concatPaths here because it will make an absolute path
+    genList (i: concatStringsSep "/" (take (i + 1) components)) (length components);
 
   # generates a list of unique path segments that are parents of a given list of paths
   missingIntermediatePaths =
